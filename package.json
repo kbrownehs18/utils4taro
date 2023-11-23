@@ -1,13 +1,15 @@
 {
   "name": "utils4taro",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "main": "index.js",
   "license": "MIT",
   "scripts": {
     "test": "jest"
   },
   "devDependencies": {
-    "@tarojs/taro": "^3.6.17"
+    "@tarojs/taro": "^3.6.17",
+    "@types/jest": "^29.5.9",
+    "ts-jest": "^29.1.1"
   },
   "dependencies": {
     "utils4ts": "1.0.9"
