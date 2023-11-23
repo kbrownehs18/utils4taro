@@ -1,82 +1,90 @@
 import Taro from '@tarojs/taro';
 
 export namespace http {
-  let defaultHeaders: any = {};
-  let baseUrlPrefix: string = '';
+  let httpOptions: InitOptions;
 
-  type HeaderFunction = (...args: any[]) => {};
+  interface InitOptions {
+    baseUrl?: string;
+    showLoading?: boolean;
+    showContent?: string;
+    showLog?: boolean;
+  }
 
-  const interceptor = function (chain: any) {
-    const requestParams = chain.requestParams;
-    console.log('RequestParams: ', requestParams);
-    const { method, data, url } = requestParams;
-    console.log(method, data, url);
-    requestParams.header = {
-      ...requestParams.header,
-      ...defaultHeaders,
-    };
-    return chain.proceed(requestParams).then((res: any) => {
-      return res;
-    });
+  export const init = (initOptions: InitOptions) => {
+    httpOptions.baseUrl = initOptions.baseUrl || '';
+    httpOptions.showLoading = initOptions.showLoading || true;
+    httpOptions.showContent = initOptions.showContent || '请求中';
+    httpOptions.showLog = initOptions.showLog || true;
   };
 
-  export const init = (
-    prefixUrl: string,
-    headers = {},
-    fn: HeaderFunction = (...args: any[]) => {
-      return {};
-    },
-    ...args: any[]
-  ) => {
-    baseUrlPrefix = prefixUrl;
-    const extHeaders = fn(...args) || {};
-    defaultHeaders = {
-      ...headers,
-      ...extHeaders,
-    };
-    Taro.addInterceptor(interceptor);
-  };
+  interface Options extends Taro.request.Option, InitOptions {}
 
-  const request = async (method: any, url: string, params = {}, headers: any = {}) => {
-    console.log('params: ', params);
+  export const request = async (options: Options) => {
+    options.showLoading = options.showLoading || httpOptions.showLoading;
+    options.showContent = options.showContent || httpOptions.showContent;
+    options.showLog = options.showLog || httpOptions.showLog;
+
+    options.timeout = options.timeout || 10000;
+    options.url = (options.baseUrl || httpOptions.baseUrl) + options.url;
+
     return new Promise((resolve, reject) => {
-      Taro.showLoading({
-        title: '请求中',
-      });
+      if (options.showLoading) {
+        Taro.showLoading({
+          title: options.showContent || '请求中',
+        });
+      }
 
-      Taro.request({
-        method: method,
-        url: baseUrlPrefix + url,
-        data: params,
-        header: headers,
-        timeout: 15000,
-        success(res) {
-          if (res.statusCode === 200) {
-            const data = res.data;
-            console.log('Response: ', data);
-            if (data.code === 0) {
-              // 成功
-              resolve(data.data);
-            } else {
-              Taro.showToast({
-                title: data.msg,
-                icon: 'none',
-              });
-            }
+      options.success = (res) => {
+        if (options.showLog) {
+          console.log('ResponseSuccess: ', res);
+        }
+
+        if (options.success) {
+          resolve(options.success(res));
+        }
+
+        if (res.statusCode === 200) {
+          const data = res.data;
+          if (data.code === 0) {
+            // 成功
+            resolve(data.data);
+          } else {
+            Taro.showModal({
+              title: '错误',
+              content: data.msg,
+              showCancel: false,
+            });
           }
-        },
-        fail(e) {
-          console.log('RequestError: ', e);
-          Taro.showToast({
-            title: '请求错误请重试',
-            icon: 'none',
-          });
-          reject(e);
-        },
-        complete(e) {
+        }
+      };
+
+      options.fail = (err) => {
+        if (options.showLog) {
+          console.log('ResponseFail: ', err);
+        }
+
+        if (options.fail) {
+          reject(options.fail(err));
+        }
+
+        Taro.showToast({
+          title: '请求失败',
+          icon: 'error',
+          duration: 2000,
+        });
+      };
+
+      const originalComplete = options.complete;
+      options.complete = (res: any) => {
+        if (originalComplete) {
+          originalComplete(res);
+        }
+        if (options.showLoading) {
           Taro.hideLoading();
-        },
-      });
+        }
+      };
+
+      Taro.request(options);
     });
   };
 }
